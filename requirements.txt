@@ -1,16 +1,3 @@
-pandas
-numpy
-scikit-learn
-xgboost
-matplotlib
-seaborn
-jupyterlab
-shap
-streamlit
-joblib
-pyyaml
-plotly
-scipy
-ta
-requests
-kaggle
+version https://git-lfs.github.com/spec/v1
+oid sha256:15c1cebe00d67d33b6d0ef94d50086e0b53c283fe3f3fd24cdf7d31a36ef01a7
+size 141
