@@ -1,0 +1,28 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+
+# Data & Models
+data/
+models/*.joblib
+
+models/*.csv
+models/
+*.joblib
+
+# Streamlit
+.streamlit/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# PDFs & Reports (optional)
+*.pdf
+
+# Large files
+*.log
