@@ -14,6 +14,13 @@ models/*.csv
 models/
 *.joblib
 
+# Datasets (too large for GitHub)
+data/raw/
+data/processed/
+
+# Models (optional)
+models/
+
 # Streamlit
 .streamlit/
 
