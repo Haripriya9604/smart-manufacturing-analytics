@@ -1,35 +1,63 @@
-# Python
+# ===============================
+# Python / Virtual Environment
+# ===============================
+.venv/
+venv/
+env/
 __pycache__/
 *.pyc
 *.pyo
 *.pyd
-.venv/
-venv/
 
-# Data & Models
-data/
-models/*.joblib
-
-models/*.csv
-models/
-*.joblib
-
-# Datasets (too large for GitHub)
-data/raw/
-data/processed/
-
-# Models (optional)
-models/
-
-# Streamlit
-.streamlit/
-
-# OS
+# ===============================
+# OS / Editor junk
+# ===============================
 .DS_Store
 Thumbs.db
+.vscode/
+.idea/
 
-# PDFs & Reports (optional)
-*.pdf
-
-# Large files
+# ===============================
+# Logs & cache
+# ===============================
 *.log
+*.tmp
+
+# ===============================
+# Data files (RAW / GENERATED)
+# ===============================
+data/raw/
+data/processed/
+data/interim/
+
+# Large generated outputs
+models/test_with_preds.csv
+
+# ===============================
+# Notebooks (optional)
+# ===============================
+*.ipynb_checkpoints
+
+# ===============================
+# Model artifacts (KEEP JOBLIB!)
+# ===============================
+# ❗ We KEEP .joblib models
+# ❗ We KEEP .json, .txt metadata
+
+# ===============================
+# Streamlit
+# ===============================
+.streamlit/secrets.toml
+
+# ===============================
+# Reports / exports
+# ===============================
+*.pdf
+*.docx
+
+# ===============================
+# Temporary build files
+# ===============================
+build/
+dist/
+*.egg-info/

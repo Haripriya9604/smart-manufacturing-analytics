@@ -9,8 +9,8 @@ from datetime import timedelta
 # Project paths (CLOUD + LOCAL SAFE)
 # ======================================================
 # File location: src/app/streamlit_app_helpers.py
-# Project root: smart-manufacturing-analytics/
-PROJECT_ROOT = Path(__file__).resolve().parents[3]
+# PROJECT ROOT is 2 levels up → src/app → smart-manufacturing-analytics
+PROJECT_ROOT = Path(__file__).resolve().parents[2]
 MODEL_DIR = PROJECT_ROOT / "models"
 
 # ======================================================
@@ -30,13 +30,9 @@ MODEL_MAP = {
 }
 
 # ======================================================
-# Auto model selector (SAFE)
+# Auto model selector
 # ======================================================
 def auto_select_model(df: pd.DataFrame) -> str:
-    """
-    Selects model based on dataset column.
-    Falls back to global model safely.
-    """
     if "dataset" in df.columns:
         ds = str(df["dataset"].iloc[0]).strip()
         return MODEL_MAP.get(ds, MODEL_MAP["global"])
@@ -46,16 +42,17 @@ def auto_select_model(df: pd.DataFrame) -> str:
 # Load model (DEPLOYMENT SAFE)
 # ======================================================
 def load_model(model_name: str):
-    path = MODEL_DIR / model_name
+    model_path = MODEL_DIR / model_name
 
-    if not path.exists():
-        available = [p.name for p in MODEL_DIR.glob("*.joblib")]
+    if not model_path.exists():
+        available = [m.name for m in MODEL_DIR.glob("*.joblib")]
         raise FileNotFoundError(
-            f"Model not found: {path}\n"
-            f"Available models: {available}"
+            f"\n❌ Model not found: {model_path}"
+            f"\n📂 MODEL_DIR resolved to: {MODEL_DIR}"
+            f"\n📦 Available models: {available}\n"
         )
 
-    model_type, model, feats = joblib.load(path)
+    model_type, model, feats = joblib.load(model_path)
     return model_type, model, feats
 
 # ======================================================
@@ -64,22 +61,16 @@ def load_model(model_name: str):
 def build_features(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
 
-    # -------------------------------
-    # Required columns
-    # -------------------------------
     required = {"unit", "cycle"}
     missing = required - set(df.columns)
     if missing:
         raise KeyError(f"Missing required columns: {missing}")
 
-    # Ensure sensor columns exist
     for s in SENSORS:
         if s not in df.columns:
             df[s] = 0.0
 
-    # -------------------------------
-    # Rolling statistics
-    # -------------------------------
+    # Rolling stats
     for w in [5, 10]:
         for s in SENSORS:
             df[f"{s}_rm_{w}"] = df.groupby("unit")[s].transform(
@@ -89,66 +80,50 @@ def build_features(df: pd.DataFrame) -> pd.DataFrame:
                 lambda x: x.rolling(w, min_periods=1).std()
             ).fillna(0)
 
-    # -------------------------------
-    # Exponentially weighted means
-    # -------------------------------
+    # EWM
     for s in SENSORS:
         df[f"{s}_ewm_03"] = df.groupby("unit")[s].transform(
             lambda x: x.ewm(alpha=0.3).mean()
         )
 
-    # -------------------------------
-    # Cumulative drift
-    # -------------------------------
+    # Drift
     for s in SENSORS:
         df[f"{s}_cum_drift"] = df.groupby("unit")[s].transform(
             lambda x: x - x.iloc[0]
         )
 
-    # -------------------------------
     # Cycle normalization
-    # -------------------------------
     df["cycle_norm"] = df.groupby("unit")["cycle"].transform(
         lambda x: x / max(x.max(), 1)
     )
     df["cycle_norm2"] = df["cycle_norm"] ** 2
     df["cycle_norm3"] = df["cycle_norm"] ** 3
 
-    # ===============================
-    # Health Index (SAFE)
-    # ===============================
-    sensor_min = df[SENSORS].min()
-    sensor_max = df[SENSORS].max()
+    # Health Index
+    smin = df[SENSORS].min()
+    smax = df[SENSORS].max()
+    hi = 1 - (df[SENSORS] - smin) / (smax - smin + 1e-6)
 
-    hi_matrix = 1 - (df[SENSORS] - sensor_min) / (sensor_max - sensor_min + 1e-6)
-
-    df["HI"] = hi_matrix.mean(axis=1)
-
+    df["HI"] = hi.mean(axis=1)
     df["HI_smooth"] = df.groupby("unit")["HI"].transform(
         lambda x: x.ewm(alpha=0.2).mean()
     )
-
     df["HI_slope"] = df.groupby("unit")["HI"].diff().fillna(0)
 
-    # Training-compatible aliases
     df["health_index"] = df["HI"]
     df["health_smooth"] = df["HI_smooth"]
 
-    # -------------------------------
-    # Operational mode fallback
-    # -------------------------------
     if "op_mode_id" not in df.columns:
         df["op_mode_id"] = 0
 
     return df
 
 # ======================================================
-# Predict RUL (ROBUST)
+# Predict RUL
 # ======================================================
 def predict_rul(df_feat: pd.DataFrame, model_type, model, feats):
     df = df_feat.copy()
 
-    # Ensure all required features exist
     for f in feats:
         if f not in df.columns:
             df[f] = 0.0
@@ -161,39 +136,25 @@ def predict_rul(df_feat: pd.DataFrame, model_type, model, feats):
     return model.predict(X)
 
 # ======================================================
-# Confidence Interval (Residual-based)
+# Confidence Interval
 # ======================================================
-def add_confidence_interval(
-    df: pd.DataFrame,
-    pred_col: str = "RUL_pred",
-    sigma: float = 12.0,
-    z: float = 1.96
-):
+def add_confidence_interval(df, pred_col="RUL_pred", sigma=12.0, z=1.96):
     df = df.copy()
-
     df["RUL_lower"] = df[pred_col] - z * sigma
     df["RUL_upper"] = df[pred_col] + z * sigma
-
-    # Operator-safe bounds
     df["RUL_lower"] = df["RUL_lower"].clip(lower=0)
-
     return df
 
 # ======================================================
-# Failure date prediction (CALENDAR-BASED)
+# Calendar-based failure date
 # ======================================================
-def add_failure_date(
-    df_latest: pd.DataFrame,
-    reference_date: pd.Timestamp = None,
-    cycle_to_days: int = 1
-):
+def add_failure_date(df_latest, reference_date=None, cycle_to_days=1):
     df = df_latest.copy()
 
     if reference_date is None:
         reference_date = pd.Timestamp.today().normalize()
 
     df["Days_to_Failure"] = df["RUL_pred"].clip(lower=0)
-
     df["Failure_Date"] = df["Days_to_Failure"].apply(
         lambda d: reference_date + timedelta(days=int(d * cycle_to_days))
     )
